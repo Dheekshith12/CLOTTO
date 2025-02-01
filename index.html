@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dress Color Suggestion</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; }
+        #imagePreview { max-width: 100%; height: auto; display: none; }
+    </style>
+</head>
+<body>
+
+    <h2>Upload Your Photo</h2>
+    <input type="file" id="imageInput" accept="image/*">
+    <br><br>
+    <img id="imagePreview">
+    <p id="result"></p>
+
+    <script>
+        async function analyzeImage(image) {
+            await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+
+            const detection = await faceapi.detectSingleFace(image, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+            if (!detection) {
+                document.getElementById("result").innerText = "No face detected.";
+                return;
+            }
+
+            const ctx = document.createElement('canvas').getContext('2d');
+            ctx.drawImage(image, 0, 0, image.width, image.height);
+
+            const skinColor = getAverageColor(ctx, detection.landmarks.positions[2].x, detection.landmarks.positions[2].y);
+            const hairColor = getAverageColor(ctx, detection.landmarks.positions[19].x, detection.landmarks.positions[19].y);
+            const eyeColor = getAverageColor(ctx, detection.landmarks.positions[37].x, detection.landmarks.positions[37].y);
+            const beardColor = getAverageColor(ctx, detection.landmarks.positions[57].x, detection.landmarks.positions[57].y);
+
+            let skinTone = skinColor.b > 140 ? "cool_skin" : skinColor.b < 120 ? "warm_skin" : "neutral_skin";
+            let hairTone = (hairColor.r + hairColor.g + hairColor.b) / 3 < 60 ? "black_hair" : (hairColor.r > hairColor.g ? "red_hair" : "brown_hair");
+            let eyeTone = eyeColor.r > eyeColor.g ? "brown_eyes" : eyeColor.g > eyeColor.b ? "green_eyes" : "blue_eyes";
+            let beardPresence = beardColor.r < 80 && beardColor.g < 80 && beardColor.b < 80 ? "Beard/Mustache Present" : "Clean-Shaven";
+
+            let jawWidth = Math.abs(detection.landmarks.positions[16].x - detection.landmarks.positions[0].x);
+            let faceHeight = Math.abs(detection.landmarks.positions[8].y - detection.landmarks.positions[19].y);
+            let faceShape = jawWidth > faceHeight * 0.9 ? "round_face" : jawWidth < faceHeight * 0.8 ? "oval_face" : "angular_face";
+
+            let contrast = Math.abs(skinColor.r - hairColor.r) + Math.abs(skinColor.g - hairColor.g) + Math.abs(skinColor.b - hairColor.b);
+            let contrastLevel = contrast > 150 ? "High Contrast" : "Low Contrast";
+
+            const dressSuggestions = {
+                "cool_skin": ["Cool blues", "Emerald green", "Purple"],
+                "warm_skin": ["Earthy tones", "Olive green", "Warm reds"],
+                "neutral_skin": ["Soft pastels", "Deep jewel tones"],
+                "black_hair": ["Royal blue", "Emerald green"],
+                "brown_hair": ["Warm neutrals", "Earthy tones"],
+                "red_hair": ["Forest green", "Warm brown"],
+                "blue_eyes": ["Beige", "Brown", "Rust"],
+                "green_eyes": ["Gold", "Purple"],
+                "brown_eyes": ["Deep blue", "Plum"],
+                "round_face": ["Darker colors", "Vertical patterns"],
+                "angular_face": ["Softer colors", "Pastels"],
+                "oval_face": ["Most colors suit well"],
+                "High Contrast": ["Bold colors", "High contrast outfits"],
+                "Low Contrast": ["Soft and blended colors"]
+            };
+
+            let recommendedColors = new Set([
+                ...dressSuggestions[skinTone], 
+                ...dressSuggestions[hairTone], 
+                ...dressSuggestions[eyeTone], 
+                ...dressSuggestions[faceShape],
+                ...dressSuggestions[contrastLevel]
+            ]);
+
+            document.getElementById("result").innerText = `
+                Detected:
+                - Skin tone: ${skinTone}
+                - Hair color: ${hairTone}
+                - Eye color: ${eyeTone}
+                - Face shape: ${faceShape}
+                - Facial Hair: ${beardPresence}
+                - Contrast Level: ${contrastLevel}
+                Suggested colors: ${[...recommendedColors].join(", ")}
+            `;
+        }
+
+        function getAverageColor(ctx, x, y) {
+            let imageData = ctx.getImageData(x, y, 5, 5).data;
+            let r = 0, g = 0, b = 0, count = 0;
+            for (let i = 0; i < imageData.length; i += 4) {
+                r += imageData[i];
+                g += imageData[i + 1];
+                b += imageData[i + 2];
+                count++;
+            }
+            return { r: r / count, g: g / count, b: b / count };
+        }
+
+        document.getElementById("imageInput").addEventListener("change", function(event) {
+            let file = event.target.files[0];
+            if (file) {
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    let image = document.getElementById("imagePreview");
+                    image.src = e.target.result;
+                    image.style.display = "block";
+                    image.onload = () => analyzeImage(image);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+
+</body>
+</html>
